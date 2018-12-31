@@ -17,24 +17,41 @@ module Deb
       attr_accessor :temp_dir
       attr_reader :repo_data
 
-      def initialize(target_repo, prefix = nil, temp_dir = nil)
+      def initialize(target_repo, prefix = nil, temp_dir = nil, logger_level = Logger::INFO)
         self.target_repo = target_repo
         self.prefix = prefix
         self.temp_dir = temp_dir
-        self.logger = Logger.new(STDOUT)
+        self.logger = Logger.new(STDOUT, level: logger_level)
 
         @repo_data = {}
+      end
+
+      # Will download the repo packages into a temp directory
+      def cache_repo
+        if temp_dir.nil? || !Dir.exists?(temp_dir)
+          Dir.mktmpdir do |dir|
+            logger.debug("Created temp dir: #{dir}")
+            Dir.chdir(dir) do
+              _cache_repo
+            end
+          end
+        else
+          logger.debug("Using temp dir: #{temp_dir}")
+          Dir.chdir(temp_dir) do
+            _cache_repo
+          end
+        end
       end
 
       # @return [Hash<Symbol, Object>]
       def crawl_repo
         @repo_data = {
-          target: target_repo,
-          prefix: prefix,
-          codenames: [],
-          components: [],
-          architectures: [],
-          data: {}
+            target: target_repo,
+            prefix: prefix,
+            codenames: [],
+            components: [],
+            architectures: [],
+            data: {}
         }
 
         retrieve_codenames.each do |codename|
@@ -165,10 +182,10 @@ module Deb
       # @return [Hash<Symbol, Object>]
       def _process_codename(codename)
         data = {
-          name: codename,
-          type: :codename,
-          release: retrieve_release(codename),
-          data: {}
+            name: codename,
+            type: :codename,
+            release: retrieve_release(codename),
+            data: {}
         }
 
         retrieve_components(codename).each do |component|
@@ -183,17 +200,17 @@ module Deb
       # @return [Hash<Symbol, Object>]
       def _process_component(codename, component)
         data = {
-          name: component,
-          type: :component,
-          data: {}
+            name: component,
+            type: :component,
+            data: {}
         }
 
         retrieve_architecture(codename, component).each do |architecture|
           data[:data][architecture] = {
-            name: architecture,
-            type: :architecture,
-            manifest: retrieve_manifest(codename, component, architecture),
-            data: {}
+              name: architecture,
+              type: :architecture,
+              manifest: retrieve_manifest(codename, component, architecture),
+              data: {}
           }
         end
 
@@ -201,6 +218,7 @@ module Deb
       end
 
       # Will populate the @repo_data sub lists with all the possible values
+      # @param data [Hash<Symbol, Object>]
       def _parse_data_hash(data)
         data.each_value do |hash|
           case hash[:type]
@@ -214,6 +232,44 @@ module Deb
 
           _parse_data_hash(hash[:data]) if hash.key? :data
         end
+      end
+
+
+      #
+      def _cache_repo
+        repo_data[:data].each_value do |codename_data|
+          codename_data[:data].each_value do |component_data|
+            component_data[:data].each_value do |architecture_data|
+              # Update manifest
+              architecture_data[:manifest].component = component_data[:name]
+              architecture_data[:manifest].architecture = architecture_data[:name]
+
+              # Download each package
+              architecture_data[:manifest].packages.each do |package|
+                _download_package(package)
+              end
+            end
+          end
+        end
+      end
+
+      # @param package [Deb::S3::Package]
+      def _download_package(package)
+        uri = URI.parse("#{target_repo}/#{prefix}/#{package.url_filename}")
+        logger.info("Downloading #{uri}")
+
+        if File.exists?(package.safe_name)
+          raise "File already exists! #{package.safe_name} => #{uri}"
+        end
+
+        open(package.safe_name, 'wb') do |file|
+          file << open(uri).read
+          package.filename = File.absolute_path(File.join(Dir.pwd, file.path))
+        end
+
+        logger.download("Successfully downloaded #{package.url_filename} to #{package.filename}")
+      rescue StandardError => e
+        logger.error(e)
       end
     end
   end

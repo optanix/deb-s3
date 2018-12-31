@@ -51,9 +51,12 @@ class Deb::S3::Manifest
     def parse_packages(str)
       m = new
       str.split("\n\n").each do |s|
-        next if s.chomp.empty?
+        next if s.chomp.empty? || s.empty?
+        begin
+          m.packages << Deb::S3::Package.parse_string(s)
+        rescue StandardError => e
 
-        m.packages << Deb::S3::Package.parse_string(s)
+        end
       end
       m
     end

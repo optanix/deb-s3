@@ -129,6 +129,10 @@ class Deb::S3::Package
     @filename
   end
 
+  def safe_name
+    "#{name}_#{version}-#{iteration}_#{architecture}".gsub(/[^a-zA-Z0-9_-]/, '-') + '.deb'
+  end
+
   def url_filename(codename = nil)
     @url_filename || "pool/#{codename}/#{name[0]}/#{name[0..1]}/#{File.basename(filename)}"
   end

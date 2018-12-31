@@ -3,7 +3,7 @@
 require File.expand_path('../../spec_helper', __dir__)
 require 'deb/s3/mirror'
 
-describe Deb::S3::Mirror do
+describe Deb::S3::Mirror, :vcr do
   let(:mirror) { Deb::S3::Mirror.new('https://download.docker.com', 'linux/ubuntu') }
 
   it 'retrieves release for xenial' do
@@ -33,5 +33,11 @@ describe Deb::S3::Mirror do
     expect(repo_data[:codenames].length).to_not be 0
     expect(repo_data[:components].length).to_not be 0
     expect(repo_data[:architectures].length).to_not be 0
+  end
+
+  it 'caches repo' do
+    m = mirror
+    m.crawl_repo
+    m.cache_repo
   end
 end
