@@ -6,25 +6,23 @@ require 'deb/s3/utils'
 require 'deb/s3/lock'
 
 describe Deb::S3::Lock do
-
   describe :locked? do
     it 'returns true if lock file exists' do
-      allow(Deb::S3::Utils).to receive(:s3_exists?) {true}
+      allow(Deb::S3::Utils).to receive(:s3_exists?) { true }
       expect(Deb::S3::Lock.locked?('stable')).to be_truthy
     end
 
     it 'returns true if lock file exists' do
-      allow(Deb::S3::Utils).to receive(:s3_exists?) {false}
+      allow(Deb::S3::Utils).to receive(:s3_exists?) { false }
       expect(Deb::S3::Lock.locked?('stable')).to be_falsey
     end
   end
 
   describe :lock do
     it 'creates a lock file' do
-
       allow(Deb::S3::Utils).to receive(:s3_store).with(any_args)
-      allow(Deb::S3::Utils).to receive(:s3_read) {"foo@bar\nabcde"}
-      allow(Deb::S3::Lock).to receive(:generate_lock_content) {"foo@bar\nabcde"}
+      allow(Deb::S3::Utils).to receive(:s3_read) { "foo@bar\nabcde" }
+      allow(Deb::S3::Lock).to receive(:generate_lock_content) { "foo@bar\nabcde" }
 
       expect(Deb::S3::Utils).to receive(:s3_read).once
       expect(Deb::S3::Lock).to receive(:generate_lock_content).once
@@ -36,7 +34,7 @@ describe Deb::S3::Lock do
 
   describe :unlock do
     it 'deletes the lock file' do
-      allow(Deb::S3::Utils).to receive(:s3_remove) {nil}
+      allow(Deb::S3::Utils).to receive(:s3_remove) { nil }
       expect(Deb::S3::Utils).to receive(:s3_remove).once
       Deb::S3::Lock.unlock('stable')
     end
@@ -44,7 +42,7 @@ describe Deb::S3::Lock do
 
   describe :current do
     before :each do
-      allow(Deb::S3::Utils).to receive(:s3_read) {'alex@localhost'}
+      allow(Deb::S3::Utils).to receive(:s3_read) { 'alex@localhost' }
       expect(Deb::S3::Utils).to receive(:s3_read).once
       @lock = Deb::S3::Lock.current('stable')
     end

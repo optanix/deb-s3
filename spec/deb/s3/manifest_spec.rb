@@ -16,7 +16,7 @@ describe Deb::S3::Manifest do
   describe '#add' do
     it 'removes packages which have the same full version' do
       epoch = Time.now.to_i
-      @manifest.packages = [create_package( name: 'discourse', epoch: epoch, version: '0.9.8.3', iteration: '1')]
+      @manifest.packages = [create_package(name: 'discourse', epoch: epoch, version: '0.9.8.3', iteration: '1')]
       new_package = create_package name: 'discourse', epoch: epoch, version: '0.9.8.3', iteration: '1'
 
       @manifest.add(new_package, true)
@@ -33,15 +33,14 @@ describe Deb::S3::Manifest do
 
     it 'removes any package with the same name, independently of the full version, if preserve_versions is false' do
       @manifest.packages = [
-          create_package(name: 'discourse', version: '0.9.8.3', iteration: '1'),
-          create_package(name: 'discourse'),
-          create_package(name: 'discourse', version: '0.9.8.4', iteration: '1', epoch: '2')
+        create_package(name: 'discourse', version: '0.9.8.3', iteration: '1'),
+        create_package(name: 'discourse'),
+        create_package(name: 'discourse', version: '0.9.8.4', iteration: '1', epoch: '2')
       ]
       new_package = create_package name: 'discourse', version: '0.9.8.5'
 
       @manifest.add(new_package, false)
       expect(@manifest.packages).to eq [new_package]
-
     end
   end
 
@@ -49,12 +48,12 @@ describe Deb::S3::Manifest do
     it 'removes packages which have the same version as one of the versions specified' do
       epoch = Time.now.to_i
       existing_packages_with_same_version = [
-          create_package(name: 'discourse', epoch: epoch, version: '0.9.8.3', iteration: '1'),
-          create_package(name: 'discourse', epoch: epoch, version: '0.9.0.0', iteration: '1'),
-          create_package(name: 'discourse', epoch: epoch, version: '0.9.0.0', iteration: '2')
+        create_package(name: 'discourse', epoch: epoch, version: '0.9.8.3', iteration: '1'),
+        create_package(name: 'discourse', epoch: epoch, version: '0.9.0.0', iteration: '1'),
+        create_package(name: 'discourse', epoch: epoch, version: '0.9.0.0', iteration: '2')
       ]
       existing_packages_with_different_version = [
-          create_package(name: 'discourse', epoch: epoch, version: '0.9.8.3', iteration: '2')
+        create_package(name: 'discourse', epoch: epoch, version: '0.9.8.3', iteration: '2')
       ]
       versions_to_delete = ["#{epoch}:0.9.8.3-1", '0.9.0.0']
 

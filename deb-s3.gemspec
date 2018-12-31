@@ -17,7 +17,7 @@ Gem::Specification.new do |gem|
 
   gem.files = Dir['**/*'].select { |d| d =~ %r{^(README|bin/|ext/|lib/)} }
 
-  gem.required_ruby_version = '>= 2.0.0'
+  gem.required_ruby_version = '>= 2.3.0'
 
   gem.add_dependency 'aws-sdk', '~> 3'
   gem.add_dependency 'thor',    '~> 0.19.0'

@@ -13,7 +13,12 @@ require 'deb/s3/package'
 require 'deb/s3/release'
 require 'deb/s3/lock'
 
-class Deb::S3::CLI < Thor
+class Deb::S3::CLI::Mirror < Thor
+  class_option :repo,
+               type: :string,
+               aliases: '-r',
+               desc: 'The repository to mirror'
+
   class_option :bucket,
                type: :string,
                aliases: '-b',
@@ -154,7 +159,7 @@ class Deb::S3::CLI < Thor
     end
 
     # make sure all the files exists
-    if missing_file = files.find { |pattern| Dir.glob(pattern).empty? }
+    if missing_file = files.find {|pattern| Dir.glob(pattern).empty?}
       error("File '#{missing_file}' doesn't exist")
     end
 
@@ -186,7 +191,7 @@ class Deb::S3::CLI < Thor
       packages_arch_all = []
 
       # examine all the files
-      files.collect { |f| Dir.glob(f) }.flatten.each do |file|
+      files.collect {|f| Dir.glob(f)}.flatten.each do |file|
         log("Examining package file #{File.basename(file)}")
         pkg = Deb::S3::Package.parse_file(file)
 
@@ -245,13 +250,13 @@ class Deb::S3::CLI < Thor
       log('Uploading packages and new manifests to S3')
       manifests.each_value do |manifest|
         begin
-          manifest.write_to_s3 { |f| sublog("Transferring #{f}") }
+          manifest.write_to_s3 {|f| sublog("Transferring #{f}")}
         rescue Deb::S3::Utils::AlreadyExistsError => e
           error("Uploading manifest failed because: #{e}")
         end
         release.update_manifest(manifest)
       end
-      release.write_to_s3 { |f| sublog("Transferring #{f}") }
+      release.write_to_s3 {|f| sublog("Transferring #{f}")}
 
       log('Update complete.')
     ensure
@@ -395,7 +400,7 @@ class Deb::S3::CLI < Thor
                                              options[:skip_package_upload])
     packages = from_manifest.packages.select do |p|
       p.name == package_name &&
-        (versions.nil? || versions.include?(p.full_version))
+          (versions.nil? || versions.include?(p.full_version))
     end
     error 'No packages found in repository.' if packages.empty?
 
@@ -408,12 +413,12 @@ class Deb::S3::CLI < Thor
     end
 
     begin
-      to_manifest.write_to_s3 { |f| sublog("Transferring #{f}") }
+      to_manifest.write_to_s3 {|f| sublog("Transferring #{f}")}
     rescue Deb::S3::Utils::AlreadyExistsError => e
       error("Copying manifest failed because: #{e}")
     end
     to_release.update_manifest(to_manifest)
-    to_release.write_to_s3 { |f| sublog("Transferring #{f}") }
+    to_release.write_to_s3 {|f| sublog("Transferring #{f}")}
 
     log 'Copy complete.'
   end
@@ -454,7 +459,7 @@ class Deb::S3::CLI < Thor
 
     # retrieve the existing manifests
     log('Retrieving existing manifests')
-    release  = Deb::S3::Release.retrieve(options[:codename], options[:origin], options[:suite])
+    release = Deb::S3::Release.retrieve(options[:codename], options[:origin], options[:suite])
     manifest = Deb::S3::Manifest.retrieve(options[:codename], component, options[:arch], options[:cache_control], false, options[:skip_package_upload])
 
     deleted = manifest.delete_package(package, versions)
@@ -471,9 +476,9 @@ class Deb::S3::CLI < Thor
     end
 
     log('Uploading new manifests to S3')
-    manifest.write_to_s3 { |f| sublog("Transferring #{f}") }
+    manifest.write_to_s3 {|f| sublog("Transferring #{f}")}
     release.update_manifest(manifest)
-    release.write_to_s3 { |f| sublog("Transferring #{f}") }
+    release.write_to_s3 {|f| sublog("Transferring #{f}")}
 
     log('Update complete.')
   end
@@ -512,10 +517,10 @@ class Deb::S3::CLI < Thor
       next unless options[:sign] || (options[:fix_manifests] && !missing_packages.empty?)
 
       log("Removing #{missing_packages.length} package(s) from the manifest...")
-      missing_packages.each { |p| manifest.packages.delete(p) }
-      manifest.write_to_s3 { |f| sublog("Transferring #{f}") }
+      missing_packages.each {|p| manifest.packages.delete(p)}
+      manifest.write_to_s3 {|f| sublog("Transferring #{f}")}
       release.update_manifest(manifest)
-      release.write_to_s3 { |f| sublog("Transferring #{f}") }
+      release.write_to_s3 {|f| sublog("Transferring #{f}")}
 
       log('Update complete.')
     end
@@ -553,17 +558,17 @@ class Deb::S3::CLI < Thor
   end
 
   def provider
-    access_key_id     = options[:access_key_id]
+    access_key_id = options[:access_key_id]
     secret_access_key = options[:secret_access_key]
-    session_token     = options[:session_token]
+    session_token = options[:session_token]
 
     if access_key_id.nil? ^ secret_access_key.nil?
       error('If you specify one of --access-key-id or --secret-access-key, you must specify the other.')
     end
     static_credentials = {}
-    static_credentials[:access_key_id]     = access_key_id     if access_key_id
+    static_credentials[:access_key_id] = access_key_id if access_key_id
     static_credentials[:secret_access_key] = secret_access_key if secret_access_key
-    static_credentials[:session_token]     = session_token     if session_token
+    static_credentials[:session_token] = session_token if session_token
 
     static_credentials
   end
@@ -572,33 +577,33 @@ class Deb::S3::CLI < Thor
     error("No value provided for required options '--bucket'") unless options[:bucket]
 
     settings = {
-      region: options[:s3_region],
-      http_proxy: options[:proxy_uri],
-      force_path_style: options[:force_path_style]
+        region: options[:s3_region],
+        http_proxy: options[:proxy_uri],
+        force_path_style: options[:force_path_style]
     }
     settings[:endpoint] = options[:endpoint] if options[:endpoint]
     settings.merge!(provider)
 
-    Deb::S3::Utils.s3          = Aws::S3::Client.new(settings)
-    Deb::S3::Utils.bucket      = options[:bucket]
+    Deb::S3::Utils.s3 = Aws::S3::Client.new(settings)
+    Deb::S3::Utils.bucket = options[:bucket]
     Deb::S3::Utils.signing_key = options[:sign]
     Deb::S3::Utils.gpg_options = options[:gpg_options]
-    Deb::S3::Utils.prefix      = options[:prefix]
-    Deb::S3::Utils.encryption  = options[:encryption]
+    Deb::S3::Utils.prefix = options[:prefix]
+    Deb::S3::Utils.encryption = options[:encryption]
 
     # make sure we have a valid visibility setting
     Deb::S3::Utils.access_policy =
-      case options[:visibility]
-      when 'public'
-        'public-read'
-      when 'private'
-        'private'
-      when 'authenticated'
-        'authenticated-read'
-      when 'bucket_owner'
-        'bucket-owner-full-control'
-      else
-        error('Invalid visibility setting given. Can be public, private, authenticated, or bucket_owner.')
-      end
+        case options[:visibility]
+        when 'public'
+          'public-read'
+        when 'private'
+          'private'
+        when 'authenticated'
+          'authenticated-read'
+        when 'bucket_owner'
+          'bucket-owner-full-control'
+        else
+          error('Invalid visibility setting given. Can be public, private, authenticated, or bucket_owner.')
+        end
   end
 end
