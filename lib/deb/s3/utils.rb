@@ -74,6 +74,7 @@ module Deb::S3::Utils
   end
 
   def s3_store(path, filename=nil, content_type='application/octet-stream; charset=binary', cache_control=nil, fail_if_exists=false)
+
     filename = File.basename(path) unless filename
     obj = s3_exists?(filename)
 

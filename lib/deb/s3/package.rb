@@ -242,7 +242,7 @@ class Deb::S3::Package
 
     # Packages manifest fields
     filename = fields.delete('Filename')
-    self.url_filename = filename && CGI.unescape(filename)
+    self.url_filename = filename && URI.decode(filename)
     self.sha1 = fields.delete('SHA1')
     self.sha256 = fields.delete('SHA256')
     self.md5 = fields.delete('MD5sum')
