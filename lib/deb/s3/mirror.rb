@@ -267,7 +267,7 @@ module Deb
           package.filename = File.absolute_path(File.join(Dir.pwd, file.path))
         end
 
-        logger.download("Successfully downloaded #{package.url_filename} to #{package.filename}")
+        logger.info("Successfully downloaded #{package.url_filename} to #{package.filename}")
       rescue StandardError => e
         logger.error(e)
       end
