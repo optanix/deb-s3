@@ -123,6 +123,9 @@ module Deb
         release = Deb::S3::Release.parse_release(release_raw)
         logger.debug("located #{release.components.length} components")
         release
+      rescue StandardError => e
+        logger.error(e)
+        Deb::S3::Release.new
       end
 
       # @param codename [String]
@@ -134,13 +137,17 @@ module Deb
         logger.debug("Fetching #{uri}")
 
         manifest_raw = Net::HTTP.get(uri)
+
         manifest = Deb::S3::Manifest.parse_packages(manifest_raw)
 
         logger.debug("located #{manifest.packages.length} packages")
-        manifest.packages.each do |package|
-          puts "#{package.name} => #{package.version} => #{package.iteration}"
-        end
+        # manifest.packages.each do |package|
+        #   puts "#{package.name} => #{package.version} => #{package.iteration}"
+        # end
         manifest
+      rescue StandardError => e
+        logger.error(e)
+        Deb::S3::Manifest.new
       end
 
       # @return [String] the repository url prefix or '' if nil
@@ -160,6 +167,7 @@ module Deb
         data = {
           name: codename,
           type: :codename,
+          release: retrieve_release(codename),
           data: {}
         }
 
@@ -180,10 +188,11 @@ module Deb
           data: {}
         }
 
-        retrieve_architecture(codename, component).each do |arch|
-          data[:data][arch] = {
-            name: arch,
+        retrieve_architecture(codename, component).each do |architecture|
+          data[:data][architecture] = {
+            name: architecture,
             type: :architecture,
+            manifest: retrieve_manifest(codename, component, architecture),
             data: {}
           }
         end

@@ -161,4 +161,27 @@ class Deb::S3::Release
 
     to_apply.each { |m| update_manifest(m) }
   end
+
+  # @return [Hash<Symbol, Object>]
+  def to_hash
+    {
+      origin: origin,
+      suite: suite,
+      codename: codename,
+      architectures: architectures,
+      components: components,
+      cache_control: cache_control,
+      files: files,
+      policy: policy
+    }
+  end
+
+  # @return [Hash<Symbol, Object>]
+  def as_json(*)
+    to_hash
+  end
+
+  def to_json(*args)
+    as_json.to_json(*args)
+  end
 end

@@ -306,4 +306,37 @@ class Deb::S3::Package
       fields[field] = value if field
     end
   end
+
+  # @return [Hash<Symbol, Object>]
+  def to_hash
+    {
+      name: name,
+      maintainer: maintainer,
+      architecture: architecture,
+      description: description,
+      version: version,
+      epoch: epoch,
+      iteration: iteration,
+      url: url,
+      category: category,
+      license: license,
+      vendor: vendor,
+      sha1: sha1,
+      sha256: sha256,
+      md5: md5,
+      size: size,
+      filename: filename,
+      url_filename: url_filename,
+      dependencies: dependencies
+    }
+  end
+
+  # @return [Hash<Symbol, Object>]
+  def as_json(*)
+    to_hash
+  end
+
+  def to_json(*args)
+    as_json.to_json(*args)
+  end
 end

@@ -144,4 +144,27 @@ class Deb::S3::Manifest
       md5: Digest::MD5.file(path).hexdigest
     }
   end
+
+  # @return [Hash<Symbol, Object>]
+  def to_hash
+    {
+      packages: packages,
+      packages_to_be_upload: packages_to_be_upload,
+      component: component,
+      architecture: architecture,
+      files: files,
+      cache_control: cache_control,
+      fail_if_exists: fail_if_exists,
+      skip_package_upload: skip_package_upload
+    }
+  end
+
+  # @return [Hash<Symbol, Object>]
+  def as_json(*)
+    to_hash
+  end
+
+  def to_json(*args)
+    as_json.to_json(*args)
+  end
 end
