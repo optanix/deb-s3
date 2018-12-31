@@ -1,6 +1,7 @@
-require 'minitest/autorun'
+# -*- encoding : utf-8 -*-
+require "minitest/autorun"
 
-$LOAD_PATH.unshift File.expand_path('../lib', __dir__)
+$LOAD_PATH.unshift File.expand_path("../../lib", __FILE__)
 require 'deb/s3'
 
 def fixture(name)
@@ -9,7 +10,7 @@ end
 
 def create_package(attributes = {})
   package = Deb::S3::Package.new
-  attributes.each do |k, v|
+  attributes.each do |k,v|
     package.send("#{k}=".to_sym, v)
   end
   package
