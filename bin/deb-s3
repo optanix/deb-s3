@@ -2,6 +2,8 @@
 # frozen_string_literal: true
 
 require 'pathname'
+require 'English'
+
 $LOAD_PATH.unshift File.join(Pathname.new(__FILE__).realpath, '../../lib')
 
 require 'rubygems'

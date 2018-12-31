@@ -20,7 +20,8 @@ Gem::Specification.new do |gem|
   gem.required_ruby_version = '>= 2.3.0'
 
   gem.add_dependency 'aws-sdk', '~> 3'
-  gem.add_dependency 'thor',    '~> 0.19.0'
+  gem.add_dependency 'thor', '~> 0.19.0'
+  gem.add_dependency 'nokogiri'
 
   gem.add_development_dependency 'rake', '~> 11'
   gem.add_development_dependency 'rspec'
