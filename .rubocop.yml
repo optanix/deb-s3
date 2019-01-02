@@ -1,0 +1,11 @@
+Style/ClassAndModuleChildren:
+  EnforcedStyle: nested
+
+Metrics/LineLength:
+  Max: 120
+
+Style/FrozenStringLiteralComment:
+  EnforcedStyle: never
+
+Layout/EndAlignment:
+  EnforcedStyleAlignWith: keyword

@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 require 'digest/sha1'
 require 'digest/sha2'
 require 'digest/md5'
@@ -31,7 +29,6 @@ class Deb::S3::Package
   attr_accessor :attributes
 
   # hashes
-  attr_writer :url_filename
   attr_accessor :sha1
   attr_accessor :sha256
   attr_accessor :md5
@@ -87,16 +84,16 @@ class Deb::S3::Package
     # http://www.debian.org/doc/manuals/maint-guide/first.en.html
     # http://wiki.debian.org/DeveloperConfiguration
     # https://github.com/jordansissel/fpm/issues/37
-    if ENV.include?('DEBEMAIL') && ENV.include?('DEBFULLNAME')
-      # Use DEBEMAIL and DEBFULLNAME as the default maintainer if available.
-      @maintainer = "#{ENV['DEBFULLNAME']} <#{ENV['DEBEMAIL']}>"
-    else
-      # TODO(sissel): Maybe support using 'git config' for a default as well?
-      # git config --get user.name, etc can be useful.
-      #
-      # Otherwise default to user@currenthost
-      @maintainer = "<#{ENV['USER']}@#{Socket.gethostname}>"
-    end
+    @maintainer = if ENV.include?('DEBEMAIL') && ENV.include?('DEBFULLNAME')
+                    # Use DEBEMAIL and DEBFULLNAME as the default maintainer if available.
+                    "#{ENV['DEBFULLNAME']} <#{ENV['DEBEMAIL']}>"
+                  else
+                    # TODO(sissel): Maybe support using 'git config' for a default as well?
+                    # git config --get user.name, etc can be useful.
+                    #
+                    # Otherwise default to user@currenthost
+                    "<#{ENV['USER']}@#{Socket.gethostname}>"
+                  end
 
     @name = nil
     @architecture = 'native'
@@ -113,7 +110,6 @@ class Deb::S3::Package
     @md5 = nil
     @size = nil
     @filename = nil
-    @url_filename = nil
 
     @dependencies = []
   end
@@ -134,11 +130,11 @@ class Deb::S3::Package
   end
 
   def url_filename(codename = nil)
-    @url_filename || "pool/#{codename}/#{name[0]}/#{name[0..1]}/#{File.basename(filename)}"
+    "pool/#{codename}/#{name[0]}/#{name[0..1]}/#{safe_name}"
   end
 
   def url_filename_encoded(codename)
-    @url_filename || "pool/#{codename}/#{name[0]}/#{name[0..1]}/#{s3_escape(File.basename(filename))}"
+    "pool/#{codename}/#{name[0]}/#{name[0..1]}/#{s3_escape(safe_name)}"
   end
 
   def generate(codename = nil)
@@ -231,9 +227,7 @@ class Deb::S3::Package
 
     # Parse 'epoch:version-iteration' in the version string
     full_version = fields.delete('Version')
-    if full_version !~ /^(?:([0-9]+):)?(.+?)(?:-(.*))?$/
-      raise "Unsupported version string '#{full_version}'"
-    end
+    raise "Unsupported version string '#{full_version}'" if full_version !~ /^(?:([0-9]+):)?(.+?)(?:-(.*))?$/
 
     self.epoch, self.version, self.iteration = $LAST_MATCH_INFO.captures
 
@@ -288,6 +282,7 @@ class Deb::S3::Package
   def parse_control(control)
     field = nil
     value = ''
+
     {}.tap do |fields|
       control.each_line do |line|
         if line =~ /^(\s+)(\S.*)$/

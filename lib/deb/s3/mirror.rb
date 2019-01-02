@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 require 'aws-sdk'
 require 'thor'
 require 'deb/s3'
@@ -16,6 +14,7 @@ module Deb
       attr_accessor :logger
       attr_accessor :temp_dir
       attr_reader :repo_data
+      attr_reader :target_host
 
       # @param target_repo [String]
       # @param prefix [String]
@@ -24,6 +23,7 @@ module Deb
       # @param logger_level [Logger::Severity]
       def initialize(target_repo, prefix = nil, temp_dir = nil, logger: nil, logger_level: Logger::INFO)
         @target_repo = target_repo.gsub(%r{(^/|/$)}, '')
+        @target_host = URI.parse(self.target_repo).host
         @prefix = prefix.gsub(%r{(^/|/$)}, '') unless prefix.nil?
         @temp_dir = temp_dir
         @logger = Logger.new(STDOUT, level: logger_level) if logger.nil?
@@ -34,9 +34,7 @@ module Deb
       def cache_repo
         self.temp_dir = Dir.mktmpdir if temp_dir.nil? || !Dir.exist?(temp_dir)
 
-        unless Dir.exist?(temp_dir)
-          logger.error("Temp dir: #{temp_dir} does not exist")
-        end
+        logger.error("Temp dir: #{temp_dir} does not exist") unless Dir.exist?(temp_dir)
 
         logger.debug("Using temp dir: #{temp_dir}")
 
@@ -240,22 +238,25 @@ module Deb
       # Will create sub directories and download the debian files using a url safe name
       def _cache_repo(dir)
         Dir.chdir(dir) do
-          repo_data[:data].each_value do |codename_data|
-            codename_data[:data].each_value do |component_data|
-              component_dir = File.join(dir, component_data[:name])
-              Dir.mkdir(component_dir) unless Dir.exist?(component_dir)
-              Dir.chdir(component_dir) do
-                component_data[:data].each_value do |architecture_data|
-                  architecture_dir = File.join(component_dir, architecture_data[:name])
-                  Dir.mkdir(architecture_dir) unless Dir.exist?(architecture_dir)
-                  Dir.chdir(architecture_dir) do
-                    # Update manifest
-                    architecture_data[:manifest].component = component_data[:name]
-                    architecture_data[:manifest].architecture = architecture_data[:name]
+          Dir.mkdir(target_host) unless Dir.exist?(target_host)
+          Dir.chdir(target_host) do
+            repo_data[:data].each_value do |codename_data|
+              codename_data[:data].each_value do |component_data|
+                component_dir = File.join(dir, target_host, component_data[:name])
+                Dir.mkdir(component_dir) unless Dir.exist?(component_dir)
+                Dir.chdir(component_dir) do
+                  component_data[:data].each_value do |architecture_data|
+                    architecture_dir = File.join(component_dir, architecture_data[:name])
+                    Dir.mkdir(architecture_dir) unless Dir.exist?(architecture_dir)
+                    Dir.chdir(architecture_dir) do
+                      # Update manifest
+                      architecture_data[:manifest].component = component_data[:name]
+                      architecture_data[:manifest].architecture = architecture_data[:name]
 
-                    # Download each package
-                    architecture_data[:manifest].packages.each do |package|
-                      _download_package(architecture_dir, package)
+                      # Download each package
+                      architecture_data[:manifest].packages.each do |package|
+                        _download_package(architecture_dir, package)
+                      end
                     end
                   end
                 end

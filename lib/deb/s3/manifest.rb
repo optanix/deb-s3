@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 require 'tempfile'
 require 'zlib'
 require 'deb/s3/utils'
@@ -37,7 +35,7 @@ class Deb::S3::Manifest
             parse_packages(s)
           else
             new
-      end
+          end
 
       m.codename = codename
       m.component = component
@@ -91,7 +89,7 @@ class Deb::S3::Manifest
       # Include packages we didn't name
       if p.name != pkg
         p
-      # Also include the packages not matching a specified version
+        # Also include the packages not matching a specified version
       elsif !versions.nil? && (p.name == pkg) && !versions.include?(p.version) && !versions.include?("#{p.version}-#{p.iteration}") && !versions.include?(p.full_version)
         p
       end

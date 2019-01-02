@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 module Deb
   module S3
     module CLIHelper

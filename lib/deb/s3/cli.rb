@@ -1,5 +1,4 @@
-require_relative 'deb/s3/per.rb' # frozen_string_literal: true
-
+require_relative 'deb/s3/per.rb'
 require 'aws-sdk'
 require 'thor'
 
@@ -152,9 +151,7 @@ class Deb::S3::CLI < Thor
                       'This is useful when hosting .deb files outside of the bucket.'
 
   def upload(*files)
-    if files.nil? || files.empty?
-      error('You must specify at least one file to upload')
-    end
+    error('You must specify at least one file to upload') if files.nil? || files.empty?
 
     # make sure all the files exists
     if missing_file = files.find { |pattern| Dir.glob(pattern).empty? }
@@ -316,9 +313,7 @@ class Deb::S3::CLI < Thor
   def show(package_name, version, arch)
     error 'You must specify the name of the package to show.' if version.nil?
     error 'You must specify the version of the package to show.' if version.nil?
-    if arch.nil?
-      error 'You must specify the architecture of the package to show.'
-    end
+    error 'You must specify the architecture of the package to show.' if arch.nil?
 
     configure_s3_client
 
@@ -372,9 +367,7 @@ class Deb::S3::CLI < Thor
     error 'You must specify a component to copy to.' if to_component.nil?
 
     arch = options[:arch]
-    if arch.nil?
-      error 'You must specify the architecture of the package to copy.'
-    end
+    error 'You must specify the architecture of the package to copy.' if arch.nil?
 
     versions = options[:versions]
     if versions.nil?
@@ -449,9 +442,7 @@ class Deb::S3::CLI < Thor
     end
 
     arch = options[:arch]
-    if arch.nil?
-      error('You must specify the architecture of the package to remove.')
-    end
+    error('You must specify the architecture of the package to remove.') if arch.nil?
 
     configure_s3_client
 
