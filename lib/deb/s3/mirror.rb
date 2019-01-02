@@ -17,41 +17,41 @@ module Deb
       attr_accessor :temp_dir
       attr_reader :repo_data
 
-      def initialize(target_repo, prefix = nil, temp_dir = nil, logger_level = Logger::INFO)
-        self.target_repo = target_repo
-        self.prefix = prefix
-        self.temp_dir = temp_dir
-        self.logger = Logger.new(STDOUT, level: logger_level)
-
+      # @param target_repo [String]
+      # @param prefix [String]
+      # @param temp_dir [String]
+      # @param logger [Logger]
+      # @param logger_level [Logger::Severity]
+      def initialize(target_repo, prefix = nil, temp_dir = nil, logger: nil, logger_level: Logger::INFO)
+        @target_repo = target_repo.gsub(%r{(^/|/$)}, '')
+        @prefix = prefix.gsub(%r{(^/|/$)}, '') unless prefix.nil?
+        @temp_dir = temp_dir
+        @logger = Logger.new(STDOUT, level: logger_level) if logger.nil?
         @repo_data = {}
       end
 
       # Will download the repo packages into a temp directory
       def cache_repo
-        if temp_dir.nil? || !Dir.exists?(temp_dir)
-          Dir.mktmpdir do |dir|
-            logger.debug("Created temp dir: #{dir}")
-            Dir.chdir(dir) do
-              _cache_repo
-            end
-          end
-        else
-          logger.debug("Using temp dir: #{temp_dir}")
-          Dir.chdir(temp_dir) do
-            _cache_repo
-          end
+        self.temp_dir = Dir.mktmpdir if temp_dir.nil? || !Dir.exist?(temp_dir)
+
+        unless Dir.exist?(temp_dir)
+          logger.error("Temp dir: #{temp_dir} does not exist")
         end
+
+        logger.debug("Using temp dir: #{temp_dir}")
+
+        _cache_repo(temp_dir)
       end
 
       # @return [Hash<Symbol, Object>]
       def crawl_repo
         @repo_data = {
-            target: target_repo,
-            prefix: prefix,
-            codenames: [],
-            components: [],
-            architectures: [],
-            data: {}
+          target: target_repo,
+          prefix: prefix,
+          codenames: [],
+          components: [],
+          architectures: [],
+          data: {}
         }
 
         retrieve_codenames.each do |codename|
@@ -65,7 +65,7 @@ module Deb
       # @return [Array<String>]
       def retrieve_codenames
         codenames = []
-        uri = URI.parse("#{target_repo}/#{prefix}/dists")
+        uri = URI.parse("#{target_repo}/#{prefix}/dists/")
         logger.debug("trying to determine codenames from #{uri}")
 
         begin
@@ -76,6 +76,7 @@ module Deb
             codenames << link.content.gsub(%r{/}, '')
           end
         rescue StandardError => e
+          logger.error("Unable to retrieve #{uri}")
           logger.error(e)
         end
         logger.debug("located #{codenames.length} codenames")
@@ -87,7 +88,7 @@ module Deb
       # @return [Array<String>]
       def retrieve_components(codename)
         components = []
-        uri = URI.parse("#{target_repo}/#{prefix}/dists/#{codename}")
+        uri = URI.parse("#{target_repo}/#{prefix}/dists/#{codename}/")
         logger.debug("trying to determine components from #{uri}")
 
         begin
@@ -112,7 +113,7 @@ module Deb
       # @return [Array<String>]
       def retrieve_architecture(codename, component)
         architectures = []
-        uri = URI.parse("#{target_repo}/#{prefix}/dists/#{codename}/#{component}")
+        uri = URI.parse("#{target_repo}/#{prefix}/dists/#{codename}/#{component}/")
         logger.debug("trying to determine architectures from #{uri}")
 
         begin
@@ -138,6 +139,8 @@ module Deb
         logger.debug("Fetching #{uri}")
         release_raw = Net::HTTP.get(uri)
         release = Deb::S3::Release.parse_release(release_raw)
+        release.codename = codename
+
         logger.debug("located #{release.components.length} components")
         release
       rescue StandardError => e
@@ -182,10 +185,10 @@ module Deb
       # @return [Hash<Symbol, Object>]
       def _process_codename(codename)
         data = {
-            name: codename,
-            type: :codename,
-            release: retrieve_release(codename),
-            data: {}
+          name: codename,
+          type: :codename,
+          release: retrieve_release(codename),
+          data: {}
         }
 
         retrieve_components(codename).each do |component|
@@ -200,17 +203,17 @@ module Deb
       # @return [Hash<Symbol, Object>]
       def _process_component(codename, component)
         data = {
-            name: component,
-            type: :component,
-            data: {}
+          name: component,
+          type: :component,
+          data: {}
         }
 
         retrieve_architecture(codename, component).each do |architecture|
           data[:data][architecture] = {
-              name: architecture,
-              type: :architecture,
-              manifest: retrieve_manifest(codename, component, architecture),
-              data: {}
+            name: architecture,
+            type: :architecture,
+            manifest: retrieve_manifest(codename, component, architecture),
+            data: {}
           }
         end
 
@@ -234,19 +237,28 @@ module Deb
         end
       end
 
+      # Will create sub directories and download the debian files using a url safe name
+      def _cache_repo(dir)
+        Dir.chdir(dir) do
+          repo_data[:data].each_value do |codename_data|
+            codename_data[:data].each_value do |component_data|
+              component_dir = File.join(dir, component_data[:name])
+              Dir.mkdir(component_dir) unless Dir.exist?(component_dir)
+              Dir.chdir(component_dir) do
+                component_data[:data].each_value do |architecture_data|
+                  architecture_dir = File.join(component_dir, architecture_data[:name])
+                  Dir.mkdir(architecture_dir) unless Dir.exist?(architecture_dir)
+                  Dir.chdir(architecture_dir) do
+                    # Update manifest
+                    architecture_data[:manifest].component = component_data[:name]
+                    architecture_data[:manifest].architecture = architecture_data[:name]
 
-      #
-      def _cache_repo
-        repo_data[:data].each_value do |codename_data|
-          codename_data[:data].each_value do |component_data|
-            component_data[:data].each_value do |architecture_data|
-              # Update manifest
-              architecture_data[:manifest].component = component_data[:name]
-              architecture_data[:manifest].architecture = architecture_data[:name]
-
-              # Download each package
-              architecture_data[:manifest].packages.each do |package|
-                _download_package(package)
+                    # Download each package
+                    architecture_data[:manifest].packages.each do |package|
+                      _download_package(architecture_dir, package)
+                    end
+                  end
+                end
               end
             end
           end
@@ -254,17 +266,19 @@ module Deb
       end
 
       # @param package [Deb::S3::Package]
-      def _download_package(package)
+      def _download_package(dir, package)
         uri = URI.parse("#{target_repo}/#{prefix}/#{package.url_filename}")
         logger.info("Downloading #{uri}")
+        file_name = File.join(dir, package.safe_name)
+        package.filename = File.absolute_path(file_name)
 
-        if File.exists?(package.safe_name)
-          raise "File already exists! #{package.safe_name} => #{uri}"
+        if File.exist?(package.safe_name)
+          logger.warn "File already exists! #{package.safe_name} => #{uri}"
+          return
         end
 
-        open(package.safe_name, 'wb') do |file|
+        open(file_name, 'wb') do |file|
           file << open(uri).read
-          package.filename = File.absolute_path(File.join(Dir.pwd, file.path))
         end
 
         logger.info("Successfully downloaded #{package.url_filename} to #{package.filename}")

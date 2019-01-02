@@ -13,7 +13,7 @@ Gem::Specification.new do |gem|
   gem.summary     = 'Easily create and manage an APT repository on S3.'
   gem.description = gem.summary
   gem.license     = 'MIT'
-  gem.executables = 'deb-s3'
+  gem.executables = ['deb-s3', 'deb-s3-mirror']
 
   gem.files = Dir['**/*'].select { |d| d =~ %r{^(README|bin/|ext/|lib/)} }
 
@@ -21,7 +21,7 @@ Gem::Specification.new do |gem|
 
   gem.add_dependency 'aws-sdk', '~> 3'
   gem.add_dependency 'nokogiri'
-  gem.add_dependency 'thor', '~> 0.19.0'
+  gem.add_dependency 'thor', '>= 0.19.0'
 
   gem.add_development_dependency 'rake', '~> 11'
   gem.add_development_dependency 'rspec'

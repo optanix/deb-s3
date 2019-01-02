@@ -130,7 +130,7 @@ class Deb::S3::Package
   end
 
   def safe_name
-    "#{name}_#{version}-#{iteration}_#{architecture}".gsub(/[^a-zA-Z0-9_-]/, '-') + '.deb'
+    "#{name}_#{version}-#{iteration}_#{architecture}.deb".gsub(/[^a-zA-Z0-9_\-\.]/, '-')
   end
 
   def url_filename(codename = nil)
