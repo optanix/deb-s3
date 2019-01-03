@@ -21,8 +21,8 @@ class Deb::S3::Package
   attr_accessor :license
   attr_accessor :architecture
   attr_accessor :description
-
   attr_accessor :dependencies
+  attr_accessor :logger
 
   # Any other attributes specific to this package.
   # This is where you'd put rpm, deb, or other specific attributes.
@@ -35,6 +35,7 @@ class Deb::S3::Package
   attr_accessor :size
 
   attr_reader :filename
+  attr_writer :url_filename
 
   class << self
     include Deb::S3::Utils
@@ -77,7 +78,9 @@ class Deb::S3::Package
     end
   end
 
-  def initialize
+  def initialize(logger = nil, logger_level: Logger::INFO)
+    @logger = logger.nil? ? Optx::Logger.new(STDOUT, level: logger_level) : logger
+
     @attributes = {}
 
     # Reference
@@ -129,12 +132,20 @@ class Deb::S3::Package
     "#{name}_#{version}-#{iteration}_#{architecture}.deb".gsub(/[^a-zA-Z0-9_\-\.]/, '-')
   end
 
+  def safe_url_path(codename = nil)
+    if codename.nil?
+      "pool/#{name[0]}/#{name[0..1]}/#{safe_name}"
+    else
+      "pool/#{codename}/#{name[0]}/#{name[0..1]}/#{safe_name}"
+    end
+  end
+
   def url_filename(codename = nil)
-    "pool/#{codename}/#{name[0]}/#{name[0..1]}/#{safe_name}"
+    @url_filename ||= safe_url_path(codename)
   end
 
   def url_filename_encoded(codename)
-    "pool/#{codename}/#{name[0]}/#{name[0..1]}/#{s3_escape(safe_name)}"
+    @filename ||= safe_url_path(codename)
   end
 
   def generate(codename = nil)

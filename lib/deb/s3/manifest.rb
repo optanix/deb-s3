@@ -12,13 +12,15 @@ class Deb::S3::Manifest
   attr_accessor :architecture
   attr_accessor :fail_if_exists
   attr_accessor :skip_package_upload
+  attr_accessor :logger
 
   attr_accessor :files
 
   attr_reader :packages
   attr_reader :packages_to_be_upload
 
-  def initialize
+  def initialize(logger = nil, logger_level: Logger::INFO)
+    @logger = logger.nil? ? Optx::Logger.new(STDOUT, level: logger_level) : logger
     @packages = []
     @packages_to_be_upload = []
     @component = nil
@@ -27,9 +29,12 @@ class Deb::S3::Manifest
     @cache_control = ''
     @fail_if_exists = false
     @skip_package_upload = false
+    @logger = Optx::Logger.new(STDOUT)
   end
 
   class << self
+
+    # @param
     def retrieve(codename, component, architecture, cache_control, fail_if_exists, skip_package_upload = false)
       m = if s = Deb::S3::Utils.s3_read("dists/#{codename}/#{component}/binary-#{architecture}/Packages")
             parse_packages(s)
@@ -46,6 +51,7 @@ class Deb::S3::Manifest
       m
     end
 
+    # @param str [String]
     def parse_packages(str)
       m = new
       str.split("\n\n").each do |s|
@@ -54,6 +60,7 @@ class Deb::S3::Manifest
         begin
           m.packages << Deb::S3::Package.parse_string(s)
         rescue StandardError => e
+          logger.error e
         end
       end
       m

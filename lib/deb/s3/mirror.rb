@@ -164,9 +164,9 @@ module Deb
         manifest = Deb::S3::Manifest.parse_packages(manifest_raw)
 
         logger.debug("#{target_host}][located #{manifest.packages.length} packages")
-        manifest.packages.each do |package|
-          puts "#{package.name} => #{package.version} => #{package.iteration}"
-        end
+        # manifest.packages.each do |package|
+        #   puts "#{package.name} => #{package.version} => #{package.iteration}"
+        # end
 
         manifest
       rescue StandardError => e
@@ -265,6 +265,8 @@ module Deb
                       # Download each package
                       architecture_data[:manifest].packages.each do |package|
                         _download_package(architecture_dir, package)
+                        # Set the url path to nil so it can be uploaded to a correct location
+                        package.url_filename = nil
                       end
                     end
                   end
