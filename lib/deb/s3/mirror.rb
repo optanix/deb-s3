@@ -6,6 +6,8 @@ require 'deb/s3/release'
 require 'nokogiri'
 require 'open-uri'
 
+require 'optx/logger'
+
 module Deb
   module S3
     class Mirror
@@ -26,7 +28,7 @@ module Deb
         @target_host = URI.parse(self.target_repo).host
         @prefix = prefix.gsub(%r{(^/|/$)}, '') unless prefix.nil?
         @temp_dir = temp_dir
-        @logger = Logger.new(STDOUT, level: logger_level) if logger.nil?
+        @logger = logger.nil? ? Optx::Logger.new(STDOUT, level: logger_level) : logger
         @repo_data = {}
       end
 
@@ -34,22 +36,23 @@ module Deb
       def cache_repo
         self.temp_dir = Dir.mktmpdir if temp_dir.nil? || !Dir.exist?(temp_dir)
 
-        logger.error("Temp dir: #{temp_dir} does not exist") unless Dir.exist?(temp_dir)
+        logger.error("#{target_host}][temp dir: #{temp_dir} does not exist") unless Dir.exist?(temp_dir)
 
-        logger.debug("Using temp dir: #{temp_dir}")
+        logger.debug("#{target_host}][using temp dir: #{temp_dir}")
 
         _cache_repo(temp_dir)
       end
 
       # @return [Hash<Symbol, Object>]
       def crawl_repo
+        logger.info("#{target_host}][starting to crawl")
         @repo_data = {
-          target: target_repo,
-          prefix: prefix,
-          codenames: [],
-          components: [],
-          architectures: [],
-          data: {}
+            target: target_repo,
+            prefix: prefix,
+            codenames: [],
+            components: [],
+            architectures: [],
+            data: {}
         }
 
         retrieve_codenames.each do |codename|
@@ -62,9 +65,11 @@ module Deb
 
       # @return [Array<String>]
       def retrieve_codenames
+        logger.info("#{target_host}][retrieving codenames")
+
         codenames = []
         uri = URI.parse("#{target_repo}/#{prefix}/dists/")
-        logger.debug("trying to determine codenames from #{uri}")
+        logger.debug("#{target_host}][trying to determine codenames from #{uri}")
 
         begin
           doc = Nokogiri::HTML(open(uri))
@@ -74,10 +79,10 @@ module Deb
             codenames << link.content.gsub(%r{/}, '')
           end
         rescue StandardError => e
-          logger.error("Unable to retrieve #{uri}")
+          logger.error("#{target_host}][unable to retrieve #{uri}")
           logger.error(e)
         end
-        logger.debug("located #{codenames.length} codenames")
+        logger.debug("#{target_host}][located #{codenames.length} codenames")
 
         codenames
       end
@@ -87,7 +92,7 @@ module Deb
       def retrieve_components(codename)
         components = []
         uri = URI.parse("#{target_repo}/#{prefix}/dists/#{codename}/")
-        logger.debug("trying to determine components from #{uri}")
+        logger.debug("#{target_host}][trying to determine components from #{uri}")
 
         begin
           doc = Nokogiri::HTML(open(uri))
@@ -101,7 +106,7 @@ module Deb
         rescue StandardError => e
           logger.error(e)
         end
-        logger.debug("located #{components.length} components")
+        logger.debug("#{target_host}][located #{components.length} components")
 
         components
       end
@@ -112,7 +117,7 @@ module Deb
       def retrieve_architecture(codename, component)
         architectures = []
         uri = URI.parse("#{target_repo}/#{prefix}/dists/#{codename}/#{component}/")
-        logger.debug("trying to determine architectures from #{uri}")
+        logger.debug("#{target_host}][trying to determine architectures from #{uri}")
 
         begin
           doc = Nokogiri::HTML(open(uri))
@@ -125,7 +130,7 @@ module Deb
         rescue StandardError => e
           logger.error(e)
         end
-        logger.debug("located #{architectures.length} architectures")
+        logger.debug("#{target_host}][located #{architectures.length} architectures")
 
         architectures
       end
@@ -134,12 +139,12 @@ module Deb
       # @return [Deb::S3:Release]
       def retrieve_release(codename)
         uri = URI.parse("#{target_repo}/#{prefix}/dists/#{codename}/Release")
-        logger.debug("Fetching #{uri}")
+        logger.debug("#{target_host}][fetching #{uri}")
         release_raw = Net::HTTP.get(uri)
         release = Deb::S3::Release.parse_release(release_raw)
         release.codename = codename
 
-        logger.debug("located #{release.components.length} components")
+        logger.debug("#{target_host}][located #{release.components.length} components")
         release
       rescue StandardError => e
         logger.error(e)
@@ -152,16 +157,17 @@ module Deb
       # @return [Deb::S3::Manifest]
       def retrieve_manifest(codename, component, architecture)
         uri = URI.parse("#{target_repo}/#{prefix}/dists/#{codename}/#{component}/binary-#{architecture}/Packages")
-        logger.debug("Fetching #{uri}")
+        logger.debug("#{target_host}][fetching #{uri}")
 
         manifest_raw = Net::HTTP.get(uri)
 
         manifest = Deb::S3::Manifest.parse_packages(manifest_raw)
 
-        logger.debug("located #{manifest.packages.length} packages")
-        # manifest.packages.each do |package|
-        #   puts "#{package.name} => #{package.version} => #{package.iteration}"
-        # end
+        logger.debug("#{target_host}][located #{manifest.packages.length} packages")
+        manifest.packages.each do |package|
+          puts "#{package.name} => #{package.version} => #{package.iteration}"
+        end
+
         manifest
       rescue StandardError => e
         logger.error(e)
@@ -182,11 +188,12 @@ module Deb
       # @param codename [String]
       # @return [Hash<Symbol, Object>]
       def _process_codename(codename)
+        logger.debug("#{target_host}][processing #{codename}")
         data = {
-          name: codename,
-          type: :codename,
-          release: retrieve_release(codename),
-          data: {}
+            name: codename,
+            type: :codename,
+            release: retrieve_release(codename),
+            data: {}
         }
 
         retrieve_components(codename).each do |component|
@@ -201,17 +208,17 @@ module Deb
       # @return [Hash<Symbol, Object>]
       def _process_component(codename, component)
         data = {
-          name: component,
-          type: :component,
-          data: {}
+            name: component,
+            type: :component,
+            data: {}
         }
 
         retrieve_architecture(codename, component).each do |architecture|
           data[:data][architecture] = {
-            name: architecture,
-            type: :architecture,
-            manifest: retrieve_manifest(codename, component, architecture),
-            data: {}
+              name: architecture,
+              type: :architecture,
+              manifest: retrieve_manifest(codename, component, architecture),
+              data: {}
           }
         end
 
@@ -237,6 +244,8 @@ module Deb
 
       # Will create sub directories and download the debian files using a url safe name
       def _cache_repo(dir)
+        logger.info("#{target_host}][starting to cache repo")
+
         Dir.chdir(dir) do
           Dir.mkdir(target_host) unless Dir.exist?(target_host)
           Dir.chdir(target_host) do
@@ -264,17 +273,19 @@ module Deb
             end
           end
         end
+
+        logger.info("#{target_host}][finished caching repo")
       end
 
       # @param package [Deb::S3::Package]
       def _download_package(dir, package)
         uri = URI.parse("#{target_repo}/#{prefix}/#{package.url_filename}")
-        logger.info("Downloading #{uri}")
+        logger.info("#{target_host}][downloading #{uri}")
         file_name = File.join(dir, package.safe_name)
         package.filename = File.absolute_path(file_name)
 
         if File.exist?(package.safe_name)
-          logger.warn "File already exists! #{package.safe_name} => #{uri}"
+          logger.warn "#{target_host}][file already exists! #{package.safe_name} => #{uri}"
           return
         end
 
@@ -282,7 +293,7 @@ module Deb
           file << open(uri).read
         end
 
-        logger.info("Successfully downloaded #{package.url_filename} to #{package.filename}")
+        logger.info("#{target_host}][successfully downloaded #{package.url_filename} to #{package.filename}")
       rescue StandardError => e
         logger.error(e)
       end

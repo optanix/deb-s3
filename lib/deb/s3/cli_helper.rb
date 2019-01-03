@@ -1,7 +1,32 @@
+require 'optx/logger'
+
 module Deb
   module S3
     module CLIHelper
-      private
+      protected
+
+
+      def release_lock!
+        if options[:lock] && @lock_acquired
+          Deb::S3::Lock.unlock(options[:codename], component, options[:arch], options[:cache_control])
+          log('Lock released.')
+        end
+      end
+
+      def init_lock!
+        if options[:lock]
+          log('Checking for existing lock file')
+          if Deb::S3::Lock.locked?(options[:codename], component, options[:arch], options[:cache_control])
+            lock = Deb::S3::Lock.current(options[:codename], component, options[:arch], options[:cache_control])
+            log("Repository is locked by another user: #{lock.user} at host #{lock.host}")
+            log('Attempting to obtain a lock')
+            Deb::S3::Lock.wait_for_lock(options[:codename], component, options[:arch], options[:cache_control])
+          end
+          log('Locking repository for updates')
+          Deb::S3::Lock.lock(options[:codename], component, options[:arch], options[:cache_control])
+          @lock_acquired = true
+        end
+      end
 
       def component
         return @component if @component
@@ -16,7 +41,7 @@ module Deb
       end
 
       def logger
-        @logger ||= Logger.new(STDOUT, level: Logger::DEBUG)
+        @logger ||= Optx::Logger.new(STDOUT, level: Logger::DEBUG)
       end
 
       def puts(*args)

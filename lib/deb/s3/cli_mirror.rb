@@ -160,18 +160,7 @@ class Deb::S3::CLIMirror < Thor
     configure_s3_client
 
     begin
-      if options[:lock]
-        log('Checking for existing lock file')
-        if Deb::S3::Lock.locked?(options[:codename], component, options[:arch], options[:cache_control])
-          lock = Deb::S3::Lock.current(options[:codename], component, options[:arch], options[:cache_control])
-          log("Repository is locked by another user: #{lock.user} at host #{lock.host}")
-          log('Attempting to obtain a lock')
-          Deb::S3::Lock.wait_for_lock(options[:codename], component, options[:arch], options[:cache_control])
-        end
-        log('Locking repository for updates')
-        Deb::S3::Lock.lock(options[:codename], component, options[:arch], options[:cache_control])
-        @lock_acquired = true
-      end
+      init_lock!
 
       # retrieve the existing manifests
       log('Retrieving existing manifests')
@@ -188,7 +177,7 @@ class Deb::S3::CLIMirror < Thor
 
       uri = URI.parse(url)
 
-      mirror = Deb::S3::Mirror.new("#{uri.scheme}://#{uri.host}", uri.path, options[:cache_dir])
+      mirror = Deb::S3::Mirror.new("#{uri.scheme}://#{uri.host}", uri.path, options[:cache_dir], logger: self.logger)
       log('Crawling repo')
       mirror.crawl_repo
       log('Caching repo')
@@ -243,10 +232,9 @@ class Deb::S3::CLIMirror < Thor
       end
       release.write_to_s3 { |f| sublog("Transferring #{f}") }
     ensure
-      if options[:lock] && @lock_acquired
-        Deb::S3::Lock.unlock(options[:codename], component, options[:arch], options[:cache_control])
-        log('Lock released.')
-      end
+      release_lock!
     end
   end
+
+
 end
