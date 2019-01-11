@@ -1,5 +1,5 @@
 require 'base64'
-require 'digest/md5'
+require 'digest'
 require 'erb'
 require 'tmpdir'
 
@@ -153,5 +153,17 @@ module Deb::S3::Utils
         key: s3_path(path)
       )
     end
+  end
+
+  # @param path [String]
+  # @return [Hash<Symbol, String>]
+  def file_digest(path)
+    {
+        size: File.size(path),
+        sha1: Digest::SHA1.file(path).hexdigest,
+        sha256: Digest::SHA256.file(path).hexdigest,
+        sha512: Digest::SHA512.file(path).hexdigest,
+        md5: Digest::MD5.file(path).hexdigest
+    }
   end
 end

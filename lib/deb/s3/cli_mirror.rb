@@ -213,7 +213,7 @@ class Deb::S3::CLIMirror < Thor
 
         packages_arch_all.each do |pkg|
           begin
-            manifest.add(pkg, options[:preserve_versions], false)
+            manifest.add(pkg, true, false)
           rescue Deb::S3::Utils::AlreadyExistsError => e
             error("Preparing manifest failed because: #{e}")
           end

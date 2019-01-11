@@ -76,6 +76,8 @@ class Deb::S3::Release
         files[name][:sha1] = hash
       when 64
         files[name][:sha256] = hash
+      when 128
+        files[name][:sha512] = hash
       end
     end
   end
@@ -98,10 +100,13 @@ class Deb::S3::Release
     release_tmp.close
     yield filename if block_given?
     s3_store(release_tmp.path, filename, 'text/plain; charset=utf-8', cache_control)
+    upload_file(release_tmp, 'Release','text/plain; charset=utf-8')
 
     # sign the file, if necessary
     if Deb::S3::Utils.signing_key
       key_param = Deb::S3::Utils.signing_key != '' ? "--default-key=#{Deb::S3::Utils.signing_key}" : ''
+
+      # Sign the InRelease file
       if system("gpg -a #{key_param} --digest-algo SHA256 #{Deb::S3::Utils.gpg_options} -s --clearsign #{release_tmp.path}")
         local_file = release_tmp.path + '.asc'
         remote_file = "dists/#{@codename}/InRelease"
@@ -113,6 +118,8 @@ class Deb::S3::Release
       else
         raise 'Signing the InRelease file failed.'
       end
+
+      # Sign the Release file
       if system("gpg -a #{key_param} --digest-algo SHA256 #{Deb::S3::Utils.gpg_options} -b #{release_tmp.path}")
         local_file = release_tmp.path + '.asc'
         remote_file = filename + '.gpg'
@@ -130,6 +137,23 @@ class Deb::S3::Release
     end
 
     release_tmp.unlink
+  end
+
+  # @param file [Tempfile]
+  # @param content_type [String]
+  def upload_file(file, name, content_type)
+    f = "dists/#{@codename}/#{name}"
+    yield f if block_given?
+    digest = file_digest(file.path)
+    @files["#{@component}/binary-#{@architecture}/#{name}"] = digest
+    s3_store(file.path, f, content_type, cache_control)
+
+    digest.each do |dig, val|
+      next if dig == :size
+      hash_name = (dig == :md5) ? "#{dig.to_s.upcase}Sum" : dig.to_s.upcase
+      hf = "dists/#{@codename}/by-hash/#{hash_name}/#{val}"
+      s3_store(file.path, hf, content_type, cache_control)
+    end
   end
 
   def update_manifest(manifest)

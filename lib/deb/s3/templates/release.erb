@@ -18,3 +18,8 @@ SHA256:
 <% files.sort.each do |f,p| -%>
  <%= p[:sha256] %> <%= p[:size].to_s.rjust(16) %> <%= f %>
 <% end -%>
+SHA512:
+<% files.sort.each do |f,p| -%>
+ <%= p[:sha512] %> <%= p[:size].to_s.rjust(16) %> <%= f %>
+<% end -%>
+Acquire-By-Hash: yes

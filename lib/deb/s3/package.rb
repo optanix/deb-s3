@@ -31,6 +31,7 @@ class Deb::S3::Package
   # hashes
   attr_accessor :sha1
   attr_accessor :sha256
+  attr_accessor :sha512
   attr_accessor :md5
   attr_accessor :size
 
@@ -43,7 +44,7 @@ class Deb::S3::Package
     def parse_file(package)
       p = new
       p.extract_info(extract_control(package))
-      p.apply_file_info(package)
+      p.check_digest
       p.filename = package
       p
     end
@@ -145,7 +146,7 @@ class Deb::S3::Package
   end
 
   def url_filename_encoded(codename)
-    @filename ||= safe_url_path(codename)
+    @url_filename ||= safe_url_path(codename)
   end
 
   def generate(codename = nil)
@@ -258,6 +259,7 @@ class Deb::S3::Package
     self.url_filename = filename && URI.decode(filename)
     self.sha1 = fields.delete('SHA1')
     self.sha256 = fields.delete('SHA256')
+    self.sha256 = fields.delete('SHA512')
     self.md5 = fields.delete('MD5sum')
     self.size = fields.delete('Size')
     self.description = fields.delete('Description')
@@ -281,13 +283,40 @@ class Deb::S3::Package
     end]
   end
 
-  # def extract_info
+  # Will compare and update the package digest information. If a miss match occurs it will exit
+  def check_digest
+    data = file_digest(self.filename)
+    self.size = data[:size]
 
-  def apply_file_info(file)
-    self.size = File.size(file)
-    self.sha1 = Digest::SHA1.file(file).hexdigest
-    self.sha256 = Digest::SHA2.file(file).hexdigest
-    self.md5 = Digest::MD5.file(file).hexdigest
+    logger.info("#{self.safe_name}][calculated digests][SHA1: #{data[:sha1]}][SHA256: #{data[:sha256]}][SHA512: #{data[:sha512]}][MD5: #{data[:md5]}")
+
+    if self.md5.nil?
+      self.md5 = data[:md5]
+    elsif self.md5 != data[:md5]
+      logger.error("#{self.safe_name}][calculated digests of MD5 does not match!][calculated: #{data[:md5]} provided: #{self.md5}")
+      self.md5 = data[:md5]
+    end
+
+    if self.sha1.nil?
+      self.sha1 = data[:sha1]
+    elsif self.sha1 != data[:sha1]
+      logger.error("#{self.safe_name}][calculated digests of SHA1 does not match!][calculated: #{data[:sha1]} provided: #{self.sha1}")
+      self.sha1 = data[:sha1]
+    end
+
+    if self.sha256.nil?
+      self.sha256 = data[:sha256]
+    elsif self.sha256 != data[:sha256]
+      logger.error("#{self.safe_name}][calculated digests of SHA256 does not match!][calculated: #{data[:sha256]} provided: #{self.sha256}")
+      self.sha256 = data[:sha256]
+    end
+
+    if self.sha512.nil?
+      self.sha512 = data[:sha512]
+    elsif self.sha512 != data[:sha512]
+      logger.error("#{self.safe_name}][calculated digests of SHA512 does not match!][calculated: #{data[:sha512]} provided: #{self.sha512}")
+      self.sha512 = data[:sha512]
+    end
   end
 
   def parse_control(control)

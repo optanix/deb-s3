@@ -5,6 +5,7 @@ require 'deb/s3/manifest'
 require 'deb/s3/release'
 require 'nokogiri'
 require 'open-uri'
+require 'digest'
 
 require 'optx/logger'
 
@@ -279,6 +280,7 @@ module Deb
         logger.info("#{target_host}][finished caching repo")
       end
 
+      # @param dir [String]
       # @param package [Deb::S3::Package]
       def _download_package(dir, package)
         uri = URI.parse("#{target_repo}/#{prefix}/#{package.url_filename}")
@@ -288,6 +290,7 @@ module Deb
 
         if File.exist?(package.safe_name)
           logger.warn "#{target_host}][file already exists! #{package.safe_name} => #{uri}"
+          package.check_digest
           return
         end
 
@@ -296,9 +299,11 @@ module Deb
         end
 
         logger.info("#{target_host}][successfully downloaded #{package.url_filename} to #{package.filename}")
+        package.check_digest
       rescue StandardError => e
         logger.error(e)
       end
+
     end
   end
 end

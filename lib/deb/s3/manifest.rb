@@ -81,9 +81,9 @@ class Deb::S3::Manifest
       end
     end
     if preserve_versions
-      packages.delete_if { |p| p.name == pkg.name && p.full_version == pkg.full_version }
+      packages.delete_if {|p| p.name == pkg.name && p.full_version == pkg.full_version}
     else
-      packages.delete_if { |p| p.name == pkg.name }
+      packages.delete_if {|p| p.name == pkg.name}
     end
     packages << pkg
     packages_to_be_upload << pkg if needs_uploading
@@ -107,7 +107,7 @@ class Deb::S3::Manifest
   end
 
   def generate
-    @packages.collect { |pkg| pkg.generate(@codename) }.join("\n")
+    @packages.collect {|pkg| pkg.generate(@codename)}.join("\n")
   end
 
   def write_to_s3
@@ -122,48 +122,26 @@ class Deb::S3::Manifest
     end
 
     # generate the Packages file
-    pkgs_temp = Tempfile.new('Packages')
-    pkgs_temp.write manifest
-    pkgs_temp.close
-    f = "dists/#{@codename}/#{@component}/binary-#{@architecture}/Packages"
-    yield f if block_given?
-    s3_store(pkgs_temp.path, f, 'text/plain; charset=utf-8', cache_control)
-    @files["#{@component}/binary-#{@architecture}/Packages"] = hashfile(pkgs_temp.path)
-    pkgs_temp.unlink
-
-    # generate the Packages.gz file
-    gztemp = Tempfile.new('Packages.gz')
-    gztemp.close
-    Zlib::GzipWriter.open(gztemp.path) { |gz| gz.write manifest }
-    f = "dists/#{@codename}/#{@component}/binary-#{@architecture}/Packages.gz"
-    yield f if block_given?
-    s3_store(gztemp.path, f, 'application/x-gzip', cache_control)
-    @files["#{@component}/binary-#{@architecture}/Packages.gz"] = hashfile(gztemp.path)
-    gztemp.unlink
+    if block_given?
+      write_packages_files(manifest) { |f| yield f }
+    else
+      write_packages_files(manifest)
+    end
 
     nil
-  end
-
-  def hashfile(path)
-    {
-      size: File.size(path),
-      sha1: Digest::SHA1.file(path).hexdigest,
-      sha256: Digest::SHA2.file(path).hexdigest,
-      md5: Digest::MD5.file(path).hexdigest
-    }
   end
 
   # @return [Hash<Symbol, Object>]
   def to_hash
     {
-      packages: packages,
-      packages_to_be_upload: packages_to_be_upload,
-      component: component,
-      architecture: architecture,
-      files: files,
-      cache_control: cache_control,
-      fail_if_exists: fail_if_exists,
-      skip_package_upload: skip_package_upload
+        packages: packages,
+        packages_to_be_upload: packages_to_be_upload,
+        component: component,
+        architecture: architecture,
+        files: files,
+        cache_control: cache_control,
+        fail_if_exists: fail_if_exists,
+        skip_package_upload: skip_package_upload
     }
   end
 
@@ -174,5 +152,47 @@ class Deb::S3::Manifest
 
   def to_json(*args)
     as_json.to_json(*args)
+  end
+
+  private
+
+  def write_packages_files(manifest)
+    pkgs_temp = Tempfile.new('Packages')
+    pkgs_temp.write manifest
+    pkgs_temp.close
+    if block_given?
+      upload_file(pkgs_temp, 'Packages','text/plain; charset=utf-8') { |f| yield f }
+    else
+      upload_file(pkgs_temp, 'Packages','text/plain; charset=utf-8')
+    end
+    pkgs_temp.unlink
+
+    # generate the Packages.gz file
+    gztemp = Tempfile.new('Packages.gz')
+    gztemp.close
+    Zlib::GzipWriter.open(gztemp.path) {|gz| gz.write manifest}
+    if block_given?
+      upload_file(gztemp, 'Packages.gz','application/x-gzip') { |f| yield f }
+    else
+      upload_file(gztemp, 'Packages.gz','application/x-gzip')
+    end
+    gztemp.unlink
+  end
+
+  # @param file [Tempfile]
+  # @param content_type [String]
+  def upload_file(file, name, content_type)
+    f = "dists/#{@codename}/#{@component}/binary-#{@architecture}/#{name}"
+    yield f if block_given?
+    digest = file_digest(file.path)
+    @files["#{@component}/binary-#{@architecture}/#{name}"] = digest
+    s3_store(file.path, f, content_type, cache_control)
+
+    digest.each do |dig, val|
+      next if dig == :size
+      hash_name = (dig == :md5) ? "#{dig.to_s.upcase}Sum" : dig.to_s.upcase
+      hf = "dists/#{@codename}/#{@component}/binary-#{@architecture}/by-hash/#{hash_name}/#{val}"
+      s3_store(file.path, hf, content_type, cache_control)
+    end
   end
 end
