@@ -235,6 +235,4 @@ class Deb::S3::CLIMirror < Thor
       release_lock!
     end
   end
-
-
 end

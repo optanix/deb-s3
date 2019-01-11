@@ -124,7 +124,7 @@ class Deb::S3::CLI < Thor
          desc: 'The architecture of the package in the APT repository.'
 
   option :preserve_versions,
-         default: false,
+         default: true,
          type: :boolean,
          aliases: '-p',
          desc: 'Whether to preserve other versions of a package ' \
@@ -335,7 +335,7 @@ class Deb::S3::CLI < Thor
                       'E.g. --versions "0.1 0.2 0.3"'
 
   option :preserve_versions,
-         default: false,
+         default: true,
          type: :boolean,
          aliases: '-p',
          desc: 'Whether to preserve other versions of a package ' \
