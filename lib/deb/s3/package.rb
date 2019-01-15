@@ -217,7 +217,7 @@ class Deb::S3::Package
       self.conflicts += [dep.gsub(/!=/, '=')]
       return []
     elsif (m = dep.match(/(\S+)\s+\(= (.+)\)/)) &&
-          attributes[:deb_ignore_iteration_in_dependencies?]
+        attributes[:deb_ignore_iteration_in_dependencies?]
       # Convert 'foo (= x)' to 'foo (>= x)' and 'foo (<< x+1)'
       # but only when flag --ignore-iteration-in-dependencies is passed.
       name, version = m[1..2]
@@ -259,7 +259,7 @@ class Deb::S3::Package
     self.url_filename = filename && URI.decode(filename)
     self.sha1 = fields.delete('SHA1')
     self.sha256 = fields.delete('SHA256')
-    self.sha256 = fields.delete('SHA512')
+    self.sha512 = fields.delete('SHA512')
     self.md5 = fields.delete('MD5sum')
     self.size = fields.delete('Size')
     self.description = fields.delete('Description')
@@ -283,6 +283,16 @@ class Deb::S3::Package
     end]
   end
 
+  class MissMatchError < StandardError
+  end
+
+  def clear_digests
+    self.md5 = nil
+    self.sha1 = nil
+    self.sha256 = nil
+    self.sha512 = nil
+  end
+
   # Will compare and update the package digest information. If a miss match occurs it will exit
   def check_digest
     data = file_digest(self.filename)
@@ -294,28 +304,28 @@ class Deb::S3::Package
       self.md5 = data[:md5]
     elsif self.md5 != data[:md5]
       logger.error("#{self.safe_name}][calculated digests of MD5 does not match!][calculated: #{data[:md5]} provided: #{self.md5}")
-      self.md5 = data[:md5]
+      raise MissMatchError.new
     end
 
     if self.sha1.nil?
       self.sha1 = data[:sha1]
     elsif self.sha1 != data[:sha1]
       logger.error("#{self.safe_name}][calculated digests of SHA1 does not match!][calculated: #{data[:sha1]} provided: #{self.sha1}")
-      self.sha1 = data[:sha1]
+      raise MissMatchError.new
     end
 
     if self.sha256.nil?
       self.sha256 = data[:sha256]
     elsif self.sha256 != data[:sha256]
       logger.error("#{self.safe_name}][calculated digests of SHA256 does not match!][calculated: #{data[:sha256]} provided: #{self.sha256}")
-      self.sha256 = data[:sha256]
+      raise MissMatchError.new
     end
 
     if self.sha512.nil?
       self.sha512 = data[:sha512]
     elsif self.sha512 != data[:sha512]
       logger.error("#{self.safe_name}][calculated digests of SHA512 does not match!][calculated: #{data[:sha512]} provided: #{self.sha512}")
-      self.sha512 = data[:sha512]
+      raise MissMatchError.new
     end
   end
 
@@ -349,24 +359,24 @@ class Deb::S3::Package
   # @return [Hash<Symbol, Object>]
   def to_hash
     {
-      name: name,
-      maintainer: maintainer,
-      architecture: architecture,
-      description: description,
-      version: version,
-      epoch: epoch,
-      iteration: iteration,
-      url: url,
-      category: category,
-      license: license,
-      vendor: vendor,
-      sha1: sha1,
-      sha256: sha256,
-      md5: md5,
-      size: size,
-      filename: filename,
-      url_filename: url_filename,
-      dependencies: dependencies
+        name: name,
+        maintainer: maintainer,
+        architecture: architecture,
+        description: description,
+        version: version,
+        epoch: epoch,
+        iteration: iteration,
+        url: url,
+        category: category,
+        license: license,
+        vendor: vendor,
+        sha1: sha1,
+        sha256: sha256,
+        md5: md5,
+        size: size,
+        filename: filename,
+        url_filename: url_filename,
+        dependencies: dependencies
     }
   end
 

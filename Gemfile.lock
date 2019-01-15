@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    deb-s3 (1.0.1)
+    deb-s3 (1.0.3)
       aws-sdk (~> 3)
       colorize
       nokogiri

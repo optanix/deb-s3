@@ -107,8 +107,8 @@ module Deb
         rescue StandardError => e
           logger.error(e)
         end
-        logger.debug("#{target_host}][located #{components.length} components")
 
+        logger.debug("#{target_host}][located #{components.length} components")
         components
       end
 
@@ -290,8 +290,14 @@ module Deb
 
         if File.exist?(package.safe_name)
           logger.warn "#{target_host}][file already exists! #{package.safe_name} => #{uri}"
-          package.check_digest
-          return
+          begin
+            package.check_digest
+            return
+          rescue Deb::S3::Package::MissMatchError => e
+            logger.error("Found missmatch, re-downloading")
+            File.unlink(package.safe_name)
+            package.clear_digests
+          end
         end
 
         open(file_name, 'wb') do |file|

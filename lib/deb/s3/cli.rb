@@ -1,4 +1,3 @@
-require_relative 'deb/s3/per.rb'
 require 'aws-sdk'
 require 'thor'
 

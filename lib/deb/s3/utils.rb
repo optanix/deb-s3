@@ -62,8 +62,10 @@ module Deb::S3::Utils
     @encryption = v
   end
 
-  class SafeSystemError < RuntimeError; end
-  class AlreadyExistsError < RuntimeError; end
+  class SafeSystemError < RuntimeError;
+  end
+  class AlreadyExistsError < RuntimeError;
+  end
 
   def safesystem(*args)
     success = system(*args)
@@ -77,7 +79,7 @@ module Deb::S3::Utils
   def debianize_op(op)
     # Operators in debian packaging are <<, <=, =, >= and >>
     # So any operator like < or > must be replaced
-    { :< => '<<', :> => '>>' }[op.to_sym] || op
+    {:< => '<<', :> => '>>'}[op.to_sym] || op
   end
 
   def template(path)
@@ -99,8 +101,8 @@ module Deb::S3::Utils
 
   def s3_exists?(path)
     Deb::S3::Utils.s3.head_object(
-      bucket: Deb::S3::Utils.bucket,
-      key: s3_path(path)
+        bucket: Deb::S3::Utils.bucket,
+        key: s3_path(path)
     )
   rescue Aws::S3::Errors::NotFound
     false
@@ -108,8 +110,8 @@ module Deb::S3::Utils
 
   def s3_read(path)
     Deb::S3::Utils.s3.get_object(
-      bucket: Deb::S3::Utils.bucket,
-      key: s3_path(path)
+        bucket: Deb::S3::Utils.bucket,
+        key: s3_path(path)
     )[:body].read
   rescue Aws::S3::Errors::NoSuchKey
     false
@@ -122,17 +124,18 @@ module Deb::S3::Utils
     file_md5 = Digest::MD5.file(path)
 
     # check if the object already exists
-    if obj != false
+    if obj
       return if (file_md5.to_s == obj[:etag].delete('"')) || (file_md5.to_s == obj[:metadata]['md5'])
+      logger.error("file #{filename} already exists with different contents")
       raise AlreadyExistsError, "file #{filename} already exists with different contents" if fail_if_exists
     end
 
     options = {
-      bucket: Deb::S3::Utils.bucket,
-      key: s3_path(filename),
-      acl: Deb::S3::Utils.access_policy,
-      content_type: content_type,
-      metadata: { 'md5' => file_md5.to_s }
+        bucket: Deb::S3::Utils.bucket,
+        key: s3_path(filename),
+        acl: Deb::S3::Utils.access_policy,
+        content_type: content_type,
+        metadata: {'md5' => file_md5.to_s}
     }
     options[:cache_control] = cache_control unless cache_control.nil?
 
@@ -149,8 +152,8 @@ module Deb::S3::Utils
   def s3_remove(path)
     if s3_exists?(path)
       Deb::S3::Utils.s3.delete_object(
-        bucket: Deb::S3::Utils.bucket,
-        key: s3_path(path)
+          bucket: Deb::S3::Utils.bucket,
+          key: s3_path(path)
       )
     end
   end
@@ -165,5 +168,9 @@ module Deb::S3::Utils
         sha512: Digest::SHA512.file(path).hexdigest,
         md5: Digest::MD5.file(path).hexdigest
     }
+  end
+
+  def logger
+    @logger ||= Optx::Logger.new(STDOUT, level: Logger::DEBUG)
   end
 end

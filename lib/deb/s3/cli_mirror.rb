@@ -168,10 +168,10 @@ class Deb::S3::CLIMirror < Thor
       manifests = {}
       release.architectures.each do |arch|
         manifests[arch] = Deb::S3::Manifest.retrieve(
-          options[:codename], component, arch,
-          options[:cache_control],
-          options[:fail_if_exists],
-          options[:skip_package_upload]
+            options[:codename], component, arch,
+            options[:cache_control],
+            options[:fail_if_exists],
+            options[:skip_package_upload]
         )
       end
 
@@ -220,17 +220,19 @@ class Deb::S3::CLIMirror < Thor
         end
       end
 
-      # upload the manifest
-      log('Uploading packages and new manifests to S3')
-      manifests.each_value do |manifest|
-        begin
-          manifest.write_to_s3 { |f| sublog("Transferring #{f}") }
-        rescue Deb::S3::Utils::AlreadyExistsError => e
-          error("Uploading manifest failed because: #{e}")
+      if options[:skip_package_upload]
+        # upload the manifest
+        log('Uploading packages and new manifests to S3')
+        manifests.each_value do |manifest|
+          begin
+            manifest.write_to_s3 {|f| sublog("Transferring #{f}")}
+          rescue Deb::S3::Utils::AlreadyExistsError => e
+            error("Uploading manifest failed because: #{e}")
+          end
+          release.update_manifest(manifest)
         end
-        release.update_manifest(manifest)
+        release.write_to_s3 {|f| sublog("Transferring #{f}")}
       end
-      release.write_to_s3 { |f| sublog("Transferring #{f}") }
     ensure
       release_lock!
     end
