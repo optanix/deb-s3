@@ -220,7 +220,7 @@ class Deb::S3::CLIMirror < Thor
         end
       end
 
-      if options[:skip_package_upload]
+      unless options[:skip_package_upload]
         # upload the manifest
         log('Uploading packages and new manifests to S3')
         manifests.each_value do |manifest|
