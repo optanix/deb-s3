@@ -12,7 +12,6 @@ class Deb::S3::Manifest
   attr_accessor :architecture
   attr_accessor :fail_if_exists
   attr_accessor :skip_package_upload
-  attr_accessor :logger
 
   attr_accessor :files
 
@@ -29,10 +28,18 @@ class Deb::S3::Manifest
     @cache_control = ''
     @fail_if_exists = false
     @skip_package_upload = false
-    @logger = Optx::Logger.new(STDOUT)
+    @@logger = Optx::Logger.new(STDOUT)
+  end
+
+  def logger
+    @@logger ||= Optx::Logger.new(STDOUT)
   end
 
   class << self
+
+    def logger
+      @@logger ||= Optx::Logger.new(STDOUT)
+    end
 
     # @param
     def retrieve(codename, component, architecture, cache_control, fail_if_exists, skip_package_upload = false)
@@ -123,7 +130,7 @@ class Deb::S3::Manifest
 
     # generate the Packages file
     if block_given?
-      write_packages_files(manifest) { |f| yield f }
+      write_packages_files(manifest) {|f| yield f}
     else
       write_packages_files(manifest)
     end
@@ -161,9 +168,9 @@ class Deb::S3::Manifest
     pkgs_temp.write manifest
     pkgs_temp.close
     if block_given?
-      upload_file(pkgs_temp, 'Packages','text/plain; charset=utf-8') { |f| yield f }
+      upload_file(pkgs_temp, 'Packages', 'text/plain; charset=utf-8') {|f| yield f}
     else
-      upload_file(pkgs_temp, 'Packages','text/plain; charset=utf-8')
+      upload_file(pkgs_temp, 'Packages', 'text/plain; charset=utf-8')
     end
     pkgs_temp.unlink
 
@@ -172,9 +179,9 @@ class Deb::S3::Manifest
     gztemp.close
     Zlib::GzipWriter.open(gztemp.path) {|gz| gz.write manifest}
     if block_given?
-      upload_file(gztemp, 'Packages.gz','application/x-gzip') { |f| yield f }
+      upload_file(gztemp, 'Packages.gz', 'application/x-gzip') {|f| yield f}
     else
-      upload_file(gztemp, 'Packages.gz','application/x-gzip')
+      upload_file(gztemp, 'Packages.gz', 'application/x-gzip')
     end
     gztemp.unlink
   end

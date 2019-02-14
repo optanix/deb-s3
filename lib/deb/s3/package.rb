@@ -295,6 +295,7 @@ class Deb::S3::Package
 
   # Will compare and update the package digest information. If a miss match occurs it will exit
   def check_digest
+    return if self.filename.nil?
     data = file_digest(self.filename)
     self.size = data[:size]
 

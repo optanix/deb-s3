@@ -6,7 +6,8 @@ require 'deb/s3/release'
 require 'nokogiri'
 require 'open-uri'
 require 'digest'
-
+require 'zlib'
+require 'stringio'
 require 'optx/logger'
 
 module Deb
@@ -18,30 +19,40 @@ module Deb
       attr_accessor :temp_dir
       attr_reader :repo_data
       attr_reader :target_host
+      attr_reader :component_filter
+      attr_reader :codename_filter
+
 
       # @param target_repo [String]
       # @param prefix [String]
       # @param temp_dir [String]
       # @param logger [Logger]
       # @param logger_level [Logger::Severity]
-      def initialize(target_repo, prefix = nil, temp_dir = nil, logger: nil, logger_level: Logger::INFO)
+      # @param codename_filter [Array(String)]
+      # @param component_filter [Array(String)]
+      def initialize(target_repo, prefix = nil, temp_dir = nil, logger: nil, logger_level: Logger::INFO,
+                     codename_filter: [],
+                     component_filter: [])
         @target_repo = target_repo.gsub(%r{(^/|/$)}, '')
         @target_host = URI.parse(self.target_repo).host
         @prefix = prefix.gsub(%r{(^/|/$)}, '') unless prefix.nil?
         @temp_dir = temp_dir
         @logger = logger.nil? ? Optx::Logger.new(STDOUT, level: logger_level) : logger
         @repo_data = {}
+        @codename_filter = codename_filter
+        @component_filter = component_filter
       end
 
       # Will download the repo packages into a temp directory
-      def cache_repo
+      # @param verify_cache [Boolean]
+      def cache_repo(verify_cache: false)
         self.temp_dir = Dir.mktmpdir if temp_dir.nil? || !Dir.exist?(temp_dir)
 
         logger.error("#{target_host}][temp dir: #{temp_dir} does not exist") unless Dir.exist?(temp_dir)
 
         logger.debug("#{target_host}][using temp dir: #{temp_dir}")
 
-        _cache_repo(temp_dir)
+        _cache_repo(temp_dir, verify_cache)
       end
 
       # @return [Hash<Symbol, Object>]
@@ -85,7 +96,8 @@ module Deb
         end
         logger.debug("#{target_host}][located #{codenames.length} codenames")
 
-        codenames
+        # If filter is not empty, return only codenames that match the filter
+        codename_filter.empty? ? codenames : codenames & codename_filter
       end
 
       # @param codename [String]
@@ -109,7 +121,8 @@ module Deb
         end
 
         logger.debug("#{target_host}][located #{components.length} components")
-        components
+        # If filter is not empty, return only components that match the filter
+        component_filter.empty? ? components : components & component_filter
       end
 
       # @param codename [String]
@@ -161,7 +174,11 @@ module Deb
         logger.debug("#{target_host}][fetching #{uri}")
 
         manifest_raw = Net::HTTP.get(uri)
-
+        if manifest_raw =~ /not found/
+          raw_gz = Net::HTTP.get(URI.parse("#{target_repo}/#{prefix}/dists/#{codename}/#{component}/binary-#{architecture}/Packages.gz"))
+          gz = Zlib::GzipReader.new(StringIO.new(raw_gz))
+          manifest_raw = gz.read
+        end
         manifest = Deb::S3::Manifest.parse_packages(manifest_raw)
 
         logger.debug("#{target_host}][located #{manifest.packages.length} packages")
@@ -244,32 +261,28 @@ module Deb
       end
 
       # Will create sub directories and download the debian files using a url safe name
-      def _cache_repo(dir)
+      # @param dir [String]
+      # @param verify_cache [Boolean]
+      def _cache_repo(dir, verify_cache = false)
         logger.info("#{target_host}][starting to cache repo")
-
         Dir.chdir(dir) do
-          Dir.mkdir(target_host) unless Dir.exist?(target_host)
-          Dir.chdir(target_host) do
-            repo_data[:data].each_value do |codename_data|
-              codename_data[:data].each_value do |component_data|
-                component_dir = File.join(dir, target_host, component_data[:name])
-                Dir.mkdir(component_dir) unless Dir.exist?(component_dir)
-                Dir.chdir(component_dir) do
-                  component_data[:data].each_value do |architecture_data|
-                    architecture_dir = File.join(component_dir, architecture_data[:name])
-                    Dir.mkdir(architecture_dir) unless Dir.exist?(architecture_dir)
-                    Dir.chdir(architecture_dir) do
-                      # Update manifest
-                      architecture_data[:manifest].component = component_data[:name]
-                      architecture_data[:manifest].architecture = architecture_data[:name]
+          repo_data[:data].each_value do |codename_data|
+            codename_data[:data].each_value do |component_data|
+              component_data[:data].each_value do |architecture_data|
+                # Update manifest
+                architecture_data[:manifest].component = component_data[:name]
+                architecture_data[:manifest].architecture = architecture_data[:name]
+                # Download each package
+                architecture_data[:manifest].packages.each do |package|
+                  package_dir = File.join(dir, package.sha256)
+                  Dir.mkdir(package_dir) unless Dir.exist?(package_dir)
 
-                      # Download each package
-                      architecture_data[:manifest].packages.each do |package|
-                        _download_package(architecture_dir, package)
-                        # Set the url path to nil so it can be uploaded to a correct location
-                        package.url_filename = nil
-                      end
-                    end
+                  if package.sha256
+                    _download_package(dir, package, verify_cache)
+                    # Set the url path to nil so it can be uploaded to a correct location
+                    package.url_filename = nil
+                  else
+                    logger.error "Unable to find sha256 #{package.inspect}"
                   end
                 end
               end
@@ -282,16 +295,20 @@ module Deb
 
       # @param dir [String]
       # @param package [Deb::S3::Package]
-      def _download_package(dir, package)
+      # @param verify_cache [Boolean]
+      def _download_package(dir, package, verify_cache = false)
+        package_dir = File.join(dir, package.sha256)
+        Dir.mkdir(package_dir) unless Dir.exist?(package_dir)
+
         uri = URI.parse("#{target_repo}/#{prefix}/#{package.url_filename}")
         logger.info("#{target_host}][downloading #{uri}")
-        file_name = File.join(dir, package.safe_name)
+        file_name = File.join(package_dir, package.safe_name)
         package.filename = File.absolute_path(file_name)
 
-        if File.exist?(package.safe_name)
+        if File.exist?(file_name)
           logger.warn "#{target_host}][file already exists! #{package.safe_name} => #{uri}"
           begin
-            package.check_digest
+            package.check_digest if verify_cache
             return
           rescue Deb::S3::Package::MissMatchError => e
             logger.error("Found missmatch, re-downloading")
@@ -306,6 +323,16 @@ module Deb
 
         logger.info("#{target_host}][successfully downloaded #{package.url_filename} to #{package.filename}")
         package.check_digest
+
+        # Check were still in the right dir
+        if File.join(dir, package.sha256) != package_dir
+          logger.warn "#{target_host}][package downloaded to wrong dir][should be #{File.join(dir, package.sha256)}"
+          package_dir = File.join(dir, package.sha256)
+          Dir.mkdir(package_dir) unless Dir.exist?(package_dir)
+          new_file_name = File.join(package_dir, package.safe_name)
+          FileUtils.mv(file_name, new_file_name)
+          package.filename = File.absolute_path(file_name)
+        end
       rescue StandardError => e
         logger.error(e)
       end

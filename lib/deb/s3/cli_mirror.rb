@@ -155,6 +155,21 @@ class Deb::S3::CLIMirror < Thor
          type: :string,
          desc: 'The directory to cache the repo files'
 
+  option :verify_cache,
+         default: false,
+         type: :boolean,
+         desc: 'Whether to verify the checksums of the cache. This will add much more time.'
+
+  option :codename_filter,
+         default: [],
+         type: :array,
+         desc: 'Codenames to include in the mirror'
+
+  option :component_filter,
+         default: [],
+         type: :array,
+         desc: 'Components to include in the mirror'
+
   def mirror(url)
     # configure AWS::S3
     configure_s3_client
@@ -177,11 +192,14 @@ class Deb::S3::CLIMirror < Thor
 
       uri = URI.parse(url)
 
-      mirror = Deb::S3::Mirror.new("#{uri.scheme}://#{uri.host}", uri.path, options[:cache_dir], logger: self.logger)
+      mirror = Deb::S3::Mirror.new("#{uri.scheme}://#{uri.host}", uri.path, options[:cache_dir],
+                                   logger: self.logger,
+                                   codename_filter: options[:codename_filter],
+                                   component_filter: options[:component_filter])
       log('Crawling repo')
       mirror.crawl_repo
       log('Caching repo')
-      mirror.cache_repo
+      mirror.cache_repo(verify_cache: options[:verify_cache])
 
       packages_arch_all = []
 
