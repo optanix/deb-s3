@@ -196,22 +196,22 @@ class Deb::S3::CLIMirror < Thor
                                    logger: self.logger,
                                    codename_filter: options[:codename_filter],
                                    component_filter: options[:component_filter])
-      log('Crawling repo')
+      logger.info('Crawling repo')
       mirror.crawl_repo
-      log('Caching repo')
+      logger.info('Caching repo')
       mirror.cache_repo(verify_cache: options[:verify_cache])
 
       packages_arch_all = []
 
-      if mirror.repo_data[:data].key? options[:codename]
-        mirror.repo_data[:data][options[:codename]][:data].each_value do |component_data|
+      mirror.repo_data[:data].each_value do |val|
+        val[:data].each_value do |component_data|
           component_data[:data].each_value do |architecture_data|
             architecture_data[:manifest].packages.each do |pkg|
               arch = architecture_data[:name]
-
               manifests[arch] = architecture_data[:manifest] unless manifests.key? arch
               # add package in manifests
               begin
+                logger.debug("Adding #{pkg.name} to #{arch}")
                 manifests[arch].add(pkg, options[:preserve_versions])
               rescue Deb::S3::Utils::AlreadyExistsError => e
                 error("Preparing manifest failed because: #{e}")
@@ -240,7 +240,7 @@ class Deb::S3::CLIMirror < Thor
 
       unless options[:skip_package_upload]
         # upload the manifest
-        log('Uploading packages and new manifests to S3')
+        logger.info('Uploading packages and new manifests to S3')
         manifests.each_value do |manifest|
           begin
             manifest.write_to_s3 {|f| sublog("Transferring #{f}")}
