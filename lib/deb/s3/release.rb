@@ -68,6 +68,10 @@ class Deb::S3::Release
 
     # find all the hashes
     str.scan(/^\s+([^\s]+)\s+(\d+)\s+(.+)$/).each do |(hash, size, name)|
+
+      # FIXME: Exclude file extensions not supported
+      next if name =~ /bz2$/
+
       files[name] ||= { size: size.to_i }
       case hash.length
       when 32

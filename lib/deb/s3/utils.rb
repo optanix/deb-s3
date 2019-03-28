@@ -121,10 +121,16 @@ module Deb::S3::Utils
     filename ||= File.basename(path)
     obj = s3_exists?(filename)
 
+    # TODO: Added to always skip if the file exists
+    if obj && filename =~ /deb$/
+      return
+    end
+
     file_md5 = Digest::MD5.file(path)
 
     # check if the object already exists
     if obj
+      logger.warn("want to upload file: #{filename}")
       return if (file_md5.to_s == obj[:etag].delete('"')) || (file_md5.to_s == obj[:metadata]['md5'])
       logger.error("file #{filename} already exists with different contents")
       raise AlreadyExistsError, "file #{filename} already exists with different contents" if fail_if_exists

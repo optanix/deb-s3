@@ -22,7 +22,6 @@ module Deb
       attr_reader :component_filter
       attr_reader :codename_filter
 
-
       # @param target_repo [String]
       # @param prefix [String]
       # @param temp_dir [String]

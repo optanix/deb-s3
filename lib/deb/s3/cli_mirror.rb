@@ -118,10 +118,10 @@ class Deb::S3::CLIMirror < Thor
   desc 'mirror url',
        'Mirrors the provided repo'
 
-  option :arch,
-         type: :string,
-         aliases: '-a',
-         desc: 'The architecture of the package in the APT repository.'
+  # option :arch,
+  #        type: :string,
+  #        aliases: '-a',
+  #        desc: 'The architecture of the package in the APT repository.'
 
   option :preserve_versions,
          default: true,
@@ -170,6 +170,11 @@ class Deb::S3::CLIMirror < Thor
          type: :array,
          desc: 'Components to include in the mirror'
 
+  option :arch_filter,
+         default: ['amd64', 'all'],
+         type: :array,
+         desc: 'Architectures to include in the mirror'
+
   def mirror(url)
     # configure AWS::S3
     configure_s3_client
@@ -182,6 +187,8 @@ class Deb::S3::CLIMirror < Thor
       release = Deb::S3::Release.retrieve(options[:codename], options[:origin], options[:suite], options[:cache_control])
       manifests = {}
       release.architectures.each do |arch|
+        next unless options[:arch_filter].include?(arch)
+
         manifests[arch] = Deb::S3::Manifest.retrieve(
             options[:codename], component, arch,
             options[:cache_control],
@@ -211,7 +218,7 @@ class Deb::S3::CLIMirror < Thor
               manifests[arch] = architecture_data[:manifest] unless manifests.key? arch
               # add package in manifests
               begin
-                logger.debug("Adding #{pkg.name} to #{arch}")
+                logger.debug("Adding #{pkg.name} : #{pkg.version} to #{arch}")
                 manifests[arch].add(pkg, options[:preserve_versions])
               rescue Deb::S3::Utils::AlreadyExistsError => e
                 error("Preparing manifest failed because: #{e}")
